@@ -1,0 +1,584 @@
+<html>
+<head>
+<script src="js/jquery.js"></script>
+<script src="js/lame.min.js"></script>
+<script src="js/mic.js"></script>
+<script src="js/jQuery.deserialize.js"></script>
+<script>
+var files=['lesson1','lesson2'];
+var labelData=[];
+
+var playlist;
+var pauseBetweenWords = 1;
+var translationSlownessFactor;
+var playbackRate;	
+var exclude = [];
+var audioObjects = [];
+var totalDuration;
+var startTime;
+
+$(function() {
+
+	var is_chrome = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
+	if (is_chrome) {
+		$('#browserWarning').hide();
+	}
+	
+	var progressBar = $('#progressBar');
+	var progressBarInterval;
+	
+	if (localStorage.getItem('exclude') && localStorage.getItem('exclude').length) {
+		exclude = JSON.parse(localStorage.getItem('exclude'));
+		if (!Array.isArray(exclude)) exclude=[];
+	}
+	
+	var mainAudio = $('audio').get(0);
+	
+	var filesToProcess = files.length;
+
+	for( let i=0; i<files.length; i++ ) {
+		labelFile='audio/'+files[i]+'.labels.txt';
+
+		let rawLabelData = {};
+
+		$.get(labelFile,function(data){
+			$('#includeFiles').append( '<div class="lesson" id="'+files[i]+'Checkbox"><input name="includeFiles" class="includeFiles" value="'+i+'" type="checkbox" checked="yes">'+files[i]+'</div>');
+			var audioObject = $('<audio controls="control" preload="none" src="audio/'+files[i]+'.mp3"></audio>');
+			$('#audio').append(files[i]+':').append( audioObject ).append('<br />');
+			var audioApi = audioObject.get(0);
+			audioObjects[i] = audioApi;
+			
+			let labels=data.split(/[\r\n]+/);
+			for (let j=0; j<labels.length; j++) {
+				let labelData = labels[j];
+				let matches;
+				if (! ( matches = labelData.match(/\s*(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(-?\d+)$/))) continue;
+				let labelName = matches[3];
+				let start = parseFloat(matches[1]);
+				let duration = parseFloat(matches[2]) - start;
+				
+				rawLabelData[labelName] = [ start, duration ];
+			}
+			
+			let thisLabelData = []
+			for (let label in rawLabelData) {
+				if (label.match(/^-/)) continue;
+				thisLabelData.push ({
+					file : files[i],
+					label : label,
+					object : audioApi,
+					esperanto : rawLabelData[label],
+					english : rawLabelData['-'+label]
+				});
+			}
+			
+			labelData.push(thisLabelData);
+			
+			// See if we have finished loading in all the data about the audio files
+			if (--filesToProcess < 1) {
+				if (localStorage.getItem('setupControlsForm')) {
+					$('#setupControlsForm input:checkbox').prop('checked',false);
+					$('#setupControlsForm').deserialize(localStorage.getItem('setupControlsForm'));
+				}
+				showResetButtons();
+			}
+		});
+		
+	}
+
+	$('#includeFiles').on('click','a.reset',function(){
+		let self = $(this);
+		
+		let file = self.parent().prop('id').slice(0,-8);
+		console.log('Resetting exclusions for '+file);
+
+		for( let i=0; i<exclude.length; i++ ) {
+			if (exclude[i][0]==file) {
+				exclude.splice(i,1);
+				i--;
+			}
+		}
+		localStorage.setItem('exclude',JSON.stringify(exclude));
+		self.remove();
+	});
+	
+	function showResetButtons() {
+		$('a.reset').remove();
+		
+		var done = {};
+		for( let i=0; i<exclude.length; i++ ) {
+			let file = exclude[i][0];
+			if (done[file]) continue;
+			done[file] = true;
+			$('#'+file+'Checkbox').append('<a class="reset" data_filename="'+files[i]+'" href="#">Reset</a>');
+		}
+	}
+	
+	var nowPlaying;
+	var forcePlay = [];
+	
+	function playWord() {
+		if (!playlist.length && !forcePlay.length) {
+			$('#stop').trigger('click');
+			return;
+		}
+
+		$('#duringPlayControls input').prop('disabled',false);
+		
+		if (forcePlay.length) {
+			nowPlaying = forcePlay.pop();
+		} else {
+			let pick = Math.floor(Math.random() * playlist.length);
+			nowPlaying = playlist.splice(pick,1).pop();
+		}
+
+		mainAudio.src = nowPlaying.object.src;
+		mainAudio.load();
+		mainAudio.playbackRate = playbackRate;
+		
+		$('#nowPlaying .lesson').html(nowPlaying.file);
+		$('#nowPlaying .label').html(nowPlaying.file+' '+nowPlaying.label);
+		$('#nowPlaying .language').html('English');
+		$('#nowPlaying .time').html(nowPlaying.english[0]);
+
+		mainAudio.currentTime = nowPlaying.english[0];
+		mainAudio.play();
+		window.setTimeout(function(){
+			mainAudio.pause();
+			$('#nowPlaying .language').html('Esperanto - YOUR TURN');
+			window.setTimeout(function(){
+				$('#nowPlaying .language').html('Esperanto');
+				$('#nowPlaying .time').html(nowPlaying.esperanto[0]);
+				mainAudio.currentTime = nowPlaying.esperanto[0];
+				mainAudio.play();
+				window.setTimeout(function(){
+					mainAudio.pause();
+					$('#nowPlaying span').html('');
+					window.setTimeout(playWord,pauseBetweenWords*1000);
+											
+				},nowPlaying.esperanto[1]*1000/playbackRate);
+			// Wait for as long as the translation bit is plus a bit
+			}, nowPlaying.esperanto[1]*translationSlownessFactor*1000);
+		}, nowPlaying.english[1]*1000/playbackRate);
+	}
+
+	$('#repeatNow').on('click',function(){
+		forcePlay.push(nowPlaying);
+		totalDuration += itemDuration(nowPlaying);
+		$(this).prop('disabled',true);
+	});
+
+	$('#repeatLater').on('click',function(){
+		playlist.push(nowPlaying);
+		totalDuration += itemDuration(nowPlaying);
+		$(this).prop('disabled',true);
+	});
+	
+	$('#gotIt').on('click',function(){
+		exclude.push([nowPlaying.file,nowPlaying.label]);
+		localStorage.setItem('exclude',JSON.stringify(exclude));
+		$(this).prop('disabled',true);
+	});
+
+	$('#stop').on('click',function(){
+		// There might be a need for more reset buttons if the user has pressed "got it" at any point
+		showResetButtons();
+		$('#setupControls').show();
+		$('#duringPlayControls').hide();
+		$('#progress').hide();
+		$('#beforePlayControls').show();
+		
+		window.clearInterval(progressBarInterval);
+		
+		$('audio').each(function(){ this.pause(); });
+		// clear all timeouts
+		timeoutId = window.setTimeout(function(){},0);
+		while (timeoutId--) { window.clearTimeout(timeoutId) }
+		$('#nowPlaying span').html('');
+		
+		if (recorder) {
+			recorder.stop();
+            recorder.getMp3Blob(function (blob) {
+				var link = document.createElement("a");
+				link.download = 'recording.mp3';
+				// Construct the uri
+				link.href = URL.createObjectURL(blob);
+				document.body.appendChild(link);
+				link.click();
+				// Cleanup the DOM
+				document.body.removeChild(link);
+				delete link;
+            }, function (e) {
+                alert('We could not retrieve your recording');
+                console.log(e);
+            });
+		}
+
+	});
+
+	function itemDuration(item) {
+		let duration = 0;
+		duration += item.english[1]/playbackRate;
+		duration += item.esperanto[1]*translationSlownessFactor;
+		duration += item.esperanto[1]/playbackRate;
+		duration += pauseBetweenWords;
+		return duration*1000;
+	}
+	
+	function startExercise() {
+
+		startTime = new Date().getTime();
+		$('#loading').hide();
+		$('#duringPlayControls').show();
+		
+		// Use this to make the play list very short for testing
+		// playlist.splice(3,99);
+		
+		playbackRate = parseFloat($('#playbackRate').val());
+		translationSlownessFactor = parseFloat($('#slownessFactor').val());
+		
+		// filter out phrases or vocab if neccessary
+		let vocabOrPhrases = $('input[name=vocabOrPhrases]:checked').val();
+		console.log(vocabOrPhrases);
+		if ( vocabOrPhrases == 'vocab' || vocabOrPhrases == 'phrases' ) {
+			// >2.5s = phrase, <2.5s = vocab
+			let cutOff = 2.5;
+			for (let i=0; i<playlist.length; i++) {
+				if (
+					( vocabOrPhrases == 'vocab' && playlist[i].esperanto[1] > cutOff ) ||
+					( vocabOrPhrases == 'phrases' && playlist[i].esperanto[1] < cutOff )
+				) {
+					console.log('removing');
+					playlist.splice(i,1);
+					i--;
+				}
+			}
+		}
+
+			
+		// filter out anything on the exclude list
+		if (exclude.length) {
+			playlist: for (let i=0; i<playlist.length; i++) {
+				exclude: for (let j=0; j<exclude.length; j++) {
+					if ( playlist[i].label == exclude[j][1] && playlist[i].file == exclude[j][0]) {
+						playlist.splice(i,1);
+						i--;
+						continue playlist;
+					}
+				}
+			}
+		}
+		
+		totalDuration=0;
+		for (let i=0; i<playlist.length; i++) {
+			totalDuration += itemDuration(playlist[i]);
+		}
+
+		progressBar.css('width','0');
+		progressBarInterval = window.setInterval(function(){
+			now = new Date().getTime();
+			let pct = (now-startTime)/(totalDuration/100);
+			progressBar.css('width',pct+'%');
+		},500);
+		$('#progress').show();
+		
+		playWord();
+	}
+
+	$('#start').on('click',function(){
+		forcePlay = [];
+		playlist = [];
+		
+		localStorage.setItem('setupControlsForm',$('#setupControlsForm').serialize());
+		
+		$('#beforePlayControls').hide();
+		$('#setupControls').hide();
+		$('#loading').show();
+
+		var filesToLoad = [];
+		$('.includeFiles:checked').each(function(){
+			let val = $(this).val();
+			playlist = playlist.concat(labelData[val]);
+			filesToLoad.push(audioObjects[val]);
+		});
+
+		var numFilesToLoad = filesToLoad.length;
+		for (i=0; i<filesToLoad.length; i++) {
+			audioObjects[i].play();
+		}
+
+		var paused = [];
+		var interval = window.setInterval( function(){
+			var loaded = 0;
+			for (i=0; i<filesToLoad.length; i++) {
+				if (audioObjects[i].readyState == 4) {
+					loaded++;
+					if (!paused[i]) {
+						audioObjects[i].pause();
+						paused[i] = true;
+					}
+				}
+			}
+			if (loaded==filesToLoad.length) {
+				console.log('All audio loaded');
+				window.clearInterval(interval);
+				startExercise();
+			}
+		},100);
+	});
+
+	var recorder = false;
+
+	$('#record').on('click',function() {
+		recorder = new MP3Recorder({
+			bitRate: 64
+		});
+			
+		recorder.start(function () {
+			// onStart
+			$('#start').trigger('click');
+		}, function () {
+			// onError
+			window.alert('Something went wrong - could not record audio');
+			recorder = false;
+		});
+	});
+
+	function blobToDataURL(blob, callback) {
+		var a = new FileReader();
+		a.onload = function (e) {
+			callback(e.target.result);
+		}
+		a.readAsDataURL(blob);
+	}
+
+});
+
+</script>
+<style>
+	body {
+		font-family: sans-serif;
+	}
+	
+	.question::before {
+		content : " ";
+		display : block;
+		height : 20px;
+	}
+	
+	.question {
+		font-weight: bold;
+		font-size: 1.5em;
+		margin-bottom: 10px;
+	}
+	
+	select {
+		vertical-align:text-bottom;
+		height: 1.5em;
+	}
+	
+	#audio { display: none; }
+
+	#nowPlaying {
+		width: 30em;
+		height: 2em;
+	}
+	
+	#nowPlaying .label { display: none; }
+	#nowPlaying .time { display: none; }
+	
+	small.footnote {
+		display: block;
+		margin: 20px 0 5px 0;
+		float: right;
+	}
+		
+	#about {
+		min-width: 20em;
+		max-width: 80em;
+	}
+
+	#mainPage {
+		min-width: 20em;
+		max-width: 30em;
+	}
+	
+	a {
+		text-decoration: none;
+	}
+	
+	li {
+		margin: 5px 0px 5px 20px;
+	}
+	
+	#progress {
+		text-align: center;
+		width: 100%;
+		background-color:#ccc;
+		position:relative;
+		margin: 0 0 20px 0;
+	}
+	
+	#progressBar {
+		opacity: 0.5;
+		position: absolute;
+		top:0;
+		left: 0;
+		background-color:#444;
+	}
+	
+	#mainPage {
+		border: 1px solid black;
+		padding: 30px;
+	}
+	
+	div.lesson {
+		float: left;
+		width: 9em;
+	}
+	
+	#includeFiles {
+		padding: 10px 0 20px 0;
+	}
+	
+	a.reset {
+		font-size: 80%;
+		font-style: italic;
+		margin-left: 10px;
+	}
+	
+	#browserWarning {
+		color: red;
+		font-size: 120%;
+	}
+	
+</style>
+</head>
+<body>
+	<table width="100%" height="100%"><tr valign="middle"><td align="center"><table><tr><td>
+		<div id="mainPage">
+			<audio preload="auto" src=""></audio>
+			<h1>The Esperanto Teacher 2.0</h1>
+			<div id="setupControls">
+				<div id="browserWarning">
+					This site is only designed to work with Google Chrome - some or all of the functionality may not work in your browser.
+				</div>
+				<form id="setupControlsForm" name="setupControls" action="#">
+				<div id="includeFiles">
+					<span class="question">Include these files:</span><br />
+				</div>
+				<span class="question">What to practice:</span><br />
+					Vocab: <input type="radio" name="vocabOrPhrases" value="vocab"> &nbsp; &nbsp; &nbsp;
+					Phrases: <input type="radio" name="vocabOrPhrases" value="phrases"> &nbsp; &nbsp; &nbsp;
+					Both: <input checked="yes" type="radio" name="vocabOrPhrases" value="both"> &nbsp; &nbsp; &nbsp;
+				<span class="question">Your translation speed:</span>
+					<select name="slownessFactor" id="slownessFactor">
+						<option value="0.5">&frac12;</option>
+						<option value="0.75">&frac34;</option>
+						<option value="1" selected="yes">normal</option>
+						<option value="1.25">1.25x</option>
+						<option value="1.5">1.5x</option>
+						<option value="1.75">1.75x</option>
+						<option value="2">2x</option>
+					</select><br />
+					<small>i.e. 2x = you require twice the time of the model answer</small>
+				<span class="question">Audio playback speed:</span>
+					<select name="playbackRate" id="playbackRate">
+						<option value="0.5">&frac12;</option>
+						<option value="0.75">&frac34;</option>
+						<option value="1" selected="yes">normal</option>
+						<option value="1.25">1.25x</option>
+						<option value="1.5">1.5x</option>
+						<option value="1.75">1.75x</option>
+						<option value="2">2x</option>
+					</select>
+				
+			</div>
+			<div id="progress" style="display:none">
+				progress
+				<div id="progressBar">&nbsp;</div>
+			</div>
+			<div id="nowPlaying">
+				<span class="lesson"></span> <span class="label"></span> <span class="time"></span> <span class="language"></span>
+			</div>
+			<div id="loading" style="display:none">
+				Loading audio files...
+			</div>
+			<div id="recordInfo" style="display:none">
+				<input type="button" id="record" value="RECORD" />
+				<input type="button" value="Cancel" onclick="$('#recordInfo').hide();$('#playControls').show();" />
+				<p>Click the "RECORD" button to start creating your .mp3 file.</p>
+				<p>A few notes about recording
+					<ul>
+						<li>Only sound generated by this web page will be recorded - your voice or other sounds created by your device won't be included</li>
+						<li>The recording is done in real time - so you have to wait for the whole exerice to finish</li>
+						<li>The .mp3 file will be automatically downloaded by your browser at the end of the exercise</li>
+					</ul>
+				</p>
+			</div>
+			<div id="playControls">
+				<div id="beforePlayControls">
+					<input type="button" id="start" value="START" />
+					<input type="button" id="getMp3" value="GET .MP3" onclick="$('#recordInfo').show();$('#playControls').hide();" />
+					
+					<small class="footnote"><a href="#" onclick="$('#mainPage').hide();$('#about').show(); return false">Help | About | Thanks</a></small>
+
+				</div>
+				<div id="duringPlayControls" style="display:none">
+					<input type="button" id="stop" value="STOP" />&nbsp;
+					<input type="button" id="gotIt" value="Got it" />
+					<input type="button" id="repeatLater" value="Repeat Later" />
+					<input type="button" id="repeatNow" value="Repeat Now" />
+				</div>
+			</div>
+			<div id="audio">
+			</div>
+			<div id="recordings">
+			</div>
+		</div>
+		<div id="about" style="display:none">
+			<h1>The Esperanto Teacher 2.0</h1>
+
+			<h2>About this site</h2>
+				<p>I built this site to help me learn Esperanto but thought others might find it useful.</p>
+				<p>I found the audio book version of the 1907 book <a target="_blank" href="https://librivox.org/the-esperanto-teacher-by-helen-fryer/">"The Esperanto Teacher: A Simple Course for Non-Grammarians"</a> to be very effective but I wanted to be able to practice just the phrases and vocabulary without having to listen to the entire lesson again. This site uses Javascript code running in your web browser to fast-forward/pause/rewind the audio automatically to represent these recordings as a series of English then Esperanto utterances with a pause in between to allow the listener to repeat the word/phrase.</p>
+				<p>It is designed to facilitate learning through repetition. It is also geared towards hands-free operation (especially when downloaded as an mp3) so that you can learn/practice whilst doing other things.</p>
+				<p>It is presented as-is with no warranty as to its fitness for any particular purpose.</p>
+
+			<h2>How it works</h2>
+				<p>This is how I use it, you might come up with other ways...</p>
+				<ul>
+					<li>Listen to a few chapters of the free audiobook of <a target="_blank" href="https://librivox.org/the-esperanto-teacher-by-helen-fryer/">"The Esperanto Teacher"</a>.</li>
+					<li>Tick the boxes on this site for the chapters you have listened to.</li>
+					<li>Choose if you want to practice just the vocabulary or vocab+phrases.</li>
+					<li>At first you might want to set "Your translation speed" to 2 - this will give you more time to think of (and say out loud- I think that helps learning) your answer.</li>
+					<li>Click "START" - the vocab and/or phrases will be read to you in a random order.</li>
+					<li>As you hear the word in English, say the Esperanto translation out loud. Then listen to the esperanto translation to see if you got it right.</li>
+					<li>As you improve you can decrease "Your translation speed" and increase "Audio playback speed" to get through all the test more quickly.</li>
+					<li>If you want to redo one word/phrase straight away click "Repeat Now". If you didn't quite get it right but want it to be given to you again randomly later in the current run-through then click "repeat later".</li>
+					<li>If you're sure that you've nailed the translation of one particular word or phrase click "Got It" and you won't be given this word next time through - this means after a few run-throughs you can narrow down your effort to just the words you find particularly hard to learn.</li>
+					<li>If you want to have an mp3 version of the test (using all the current speed settings and excluding all the words you've got the hang of) then click "GET MP3" and then "Record". At the end of the run-through an mp3 file should be downloaded by your browser.</li>
+				</ul>
+				<p>Some other points to note...</p>
+				<ul>
+					<li>Your settings will automatically be saved by your browser when you click "START" and will automatically be loaded whenever you reload the page using the same browser.</li>
+					<li>The words you have click "Got it" for will be remembered by your browser - if you use a different browser these won't be carried across.</li>
+				</ul>
+
+			<h2>Thanks</h2>
+			<p>This would not be possible without the work of the following people:
+				<ul>
+					<li>Helen Fryer: Author of <a target="_blank" href="http://www.gutenberg.org/ebooks/8177">The Esperanto Teacher: A Simple Course for Non-Grammarians</a> published in 1907</li>
+					<li>Nicholas James Bridgewater: For his reading of The Esperanto Teacher <a target="_blank" href="https://librivox.org/the-esperanto-teacher-by-helen-fryer/">available on LibriVox</a></li>
+					<li>Alex Zhukov (and other contributors): For the <a target="_blank" href="https://github.com/zhuker/lamejs">lamejs library</a> used to generate the mp3 downloads</li>
+				</ul>
+
+			<h2>What if it doesn't work?</h2>
+			<p>The site is designed to work in Google Chrome browser. It uses some pretty cutting edge features (especially for the mp3 download) so if you try any other browser this likely won't work - sorry.</p>
+			<p>If you would like to contribute improvements you can contact me at the address below, however I can't guarantee a speedy response.</p>
+			<img width="200" src="email.png" />
+			<small class="footnote"><a class="close button" href="#" onclick="$('#mainPage').show();$('#about').hide()">&lt;&lt; Back</a></small>
+		</div>
+	</td></tr></table></td></tr></table>
+</body>
+</html>
