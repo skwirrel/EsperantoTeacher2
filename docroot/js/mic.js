@@ -7,7 +7,7 @@
 
     var recorder = this, startTime = 0, context = new AudioContext();
     config = config || {};
-    var realTimeWorker = new Worker('worker-realtime.js');
+    var realTimeWorker = new Worker('js/worker-realtime.js');
 
     // Initializes LAME so that we can record.
     this.initialize = function () {
@@ -17,13 +17,13 @@
 
 
     // This function finalizes LAME output and saves the MP3 data to a file.
-    var microphone, processor;
+    var microphone = false , processor;
     // Function that handles getting audio out of the browser's media API.
     function beginRecording() {
       // Set up Web Audio API to process data from the media stream
       var a = document.getElementsByTagName("audio")[0];
-      console.log(a);
-      microphone = context.createMediaElementSource(a);
+    
+      if (!microphone) microphone = context.createMediaElementSource(a);
       // Settings a bufferSize of 0 instructs the browser to choose the best bufferSize
       processor = context.createScriptProcessor(0, 1, 1);
       // Add all buffers from LAME into an array.

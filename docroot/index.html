@@ -27,6 +27,8 @@ $(function() {
 	
 	var progressBar = $('#progressBar');
 	var progressBarInterval;
+
+    var microSound = $('#microSound').get(0);
 	
 	if (localStorage.getItem('exclude') && localStorage.getItem('exclude').length) {
 		exclude = JSON.parse(localStorage.getItem('exclude'));
@@ -201,7 +203,8 @@ $(function() {
 			recorder.stop();
             recorder.getMp3Blob(function (blob) {
 				var link = document.createElement("a");
-				link.download = 'recording.mp3';
+                let date = new Date().toString().slice(0,-15).replace(/[ :]/g,'_');
+				link.download = 'recording_'+date+'.mp3';
 				// Construct the uri
 				link.href = URL.createObjectURL(blob);
 				document.body.appendChild(link);
@@ -233,7 +236,7 @@ $(function() {
 		$('#duringPlayControls').show();
 		
 		// Use this to make the play list very short for testing
-		// playlist.splice(3,99);
+		playlist.splice(3,99);
 		
 		playbackRate = parseFloat($('#playbackRate').val());
 		translationSlownessFactor = parseFloat($('#slownessFactor').val());
@@ -287,11 +290,17 @@ $(function() {
 	}
 
 	$('#start').on('click',function(){
+        // For Chrome mobile we have to make sure we play a sound very quickly
+        // see https://stackoverflow.com/questions/32424775/failed-to-execute-play-on-htmlmediaelement-api-can-only-be-initiated-by-a-u
+        microSound.play();
+
 		forcePlay = [];
 		playlist = [];
 		
 		localStorage.setItem('setupControlsForm',$('#setupControlsForm').serialize());
-		
+	
+        $('#recordInfo').hide();
+        $('#playControls').show();	
 		$('#beforePlayControls').hide();
 		$('#setupControls').hide();
 		$('#loading').show();
@@ -331,9 +340,11 @@ $(function() {
 	var recorder = false;
 
 	$('#record').on('click',function() {
-		recorder = new MP3Recorder({
-			bitRate: 64
-		});
+		if (!recorder) {
+            recorder = new MP3Recorder({
+                bitRate: 64
+            });
+        }
 			
 		recorder.start(function () {
 			// onStart
@@ -357,10 +368,52 @@ $(function() {
 
 </script>
 <style>
+
+    /* Special styles for narrow displays */
+    @media (max-width: 30em) {	
+        tr.middle {
+            vertical-align: top;
+        }
+
+        tr.middle table {
+            width: 100%;
+        }
+
+
+        h1 {
+            font-size: 175%;
+        }
+
+        #mainPage {
+            width : 100%;
+        }
+    }
+
+    /* Special styles for wide displays */
+    @media (min-width: 30em) {	
+        tr.middle {
+            vertical-align: middle;
+        }
+        #mainPage {
+            border: 1px solid black;
+            padding: 30px;
+            min-width: 30em;
+            max-width: 30em;
+        }
+        #about {
+            min-width: 20em;
+            max-width: 80em;
+        }
+
+    }
+
 	body {
 		font-family: sans-serif;
 	}
-	
+
+    table {
+        margin: 0;
+    }
 	.question::before {
 		content : " ";
 		display : block;
@@ -381,7 +434,6 @@ $(function() {
 	#audio { display: none; }
 
 	#nowPlaying {
-		width: 30em;
 		height: 2em;
 	}
 	
@@ -394,15 +446,6 @@ $(function() {
 		float: right;
 	}
 		
-	#about {
-		min-width: 20em;
-		max-width: 80em;
-	}
-
-	#mainPage {
-		min-width: 20em;
-		max-width: 30em;
-	}
 	
 	a {
 		text-decoration: none;
@@ -427,12 +470,7 @@ $(function() {
 		left: 0;
 		background-color:#444;
 	}
-	
-	#mainPage {
-		border: 1px solid black;
-		padding: 30px;
-	}
-	
+
 	div.lesson {
 		float: left;
 		width: 9em;
@@ -456,10 +494,11 @@ $(function() {
 </style>
 </head>
 <body>
-	<table width="100%" height="100%"><tr valign="middle"><td align="center"><table><tr><td>
+	<table width="100%" height="100%"><tr class="middle" ><td align="center"><table><tr><td>
 		<div id="mainPage">
 			<audio preload="auto" src=""></audio>
-			<h1>The Esperanto Teacher 2.0</h1>
+			<audio id="microSound" preload="auto" src="audio/microSound.mp3"></audio>
+			<h1 style="max-width:90%; display: block;">The Esperanto Teacher 2.0</h1>
 			<div id="setupControls">
 				<div id="browserWarning">
 					This site is only designed to work with Google Chrome - some or all of the functionality may not work in your browser.
