@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="js/jquery.js"></script>
 <script src="js/lame.min.js"></script>
+<script src="js/jquery.qtip.min.js"></script>
 <script src="js/mic.js"></script>
 <script src="js/jQuery.deserialize.js"></script>
 <script>
@@ -11,14 +12,20 @@ var labelData=[];
 
 var playlist;
 var pauseBetweenWords = 1;
-var translationSlownessFactor;
-var playbackRate;	
+var translationSlownessFactor1, playbackRate, order;
 var exclude = [];
 var audioObjects = [];
 var totalDuration;
 var startTime;
 
 $(function() {
+
+    // use qTip for inline help
+    $('[title!=""]').qtip({
+        position: {
+            viewport: $(window)
+        }
+    });
 
 	var is_chrome = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
 	if (is_chrome) {
@@ -46,7 +53,7 @@ $(function() {
 
 		$.get(labelFile,function(data){
 			$('#includeFiles').append( '<div class="lesson" id="'+files[i]+'Checkbox"><input name="includeFiles" class="includeFiles" value="'+i+'" type="checkbox" checked="yes">'+files[i]+'</div>');
-			var audioObject = $('<audio controls="control" preload="none" src="audio/'+files[i]+'.mp3"></audio>');
+			var audioObject = $('<audio controls="control" preload="none" src="audio/'+files[i]+'_exercise.mp3"></audio>');
 			$('#audio').append(files[i]+':').append( audioObject ).append('<br />');
 			var audioApi = audioObject.get(0);
 			audioObjects[i] = audioApi;
@@ -131,8 +138,12 @@ $(function() {
 		if (forcePlay.length) {
 			nowPlaying = forcePlay.pop();
 		} else {
-			let pick = Math.floor(Math.random() * playlist.length);
-			nowPlaying = playlist.splice(pick,1).pop();
+            if (order=='random') {
+                let pick = Math.floor(Math.random() * playlist.length);
+                nowPlaying = playlist.splice(pick,1).pop();
+            } else {
+                nowPlaying = playlist.shift();
+            }
 		}
 
 		mainAudio.src = nowPlaying.object.src;
@@ -149,6 +160,10 @@ $(function() {
 		window.setTimeout(function(){
 			mainAudio.pause();
 			$('#nowPlaying .language').html('Esperanto - YOUR TURN');
+            let translationPause;
+            if (translationSlownessFactor1==0) translationPause=pauseBetweenWords;
+            else translationPause=nowPlaying.esperanto[1]*translationSlownessFactor1;
+            
 			window.setTimeout(function(){
 				$('#nowPlaying .language').html('Esperanto');
 				$('#nowPlaying .time').html(nowPlaying.esperanto[0]);
@@ -156,12 +171,16 @@ $(function() {
 				mainAudio.play();
 				window.setTimeout(function(){
 					mainAudio.pause();
-					$('#nowPlaying span').html('');
-					window.setTimeout(playWord,pauseBetweenWords*1000);
+    				$('#nowPlaying span').html('');
+                    if (translationSlownessFactor2>0) {
+    					$('#nowPlaying .language').html('Esperanto - YOUR TURN');
+                    }
+                    let pause = pauseBetweenWords + nowPlaying.esperanto[1] * translationSlownessFactor2;
+					window.setTimeout(playWord,pause*1000);
 											
 				},nowPlaying.esperanto[1]*1000/playbackRate);
 			// Wait for as long as the translation bit is plus a bit
-			}, nowPlaying.esperanto[1]*translationSlownessFactor*1000);
+			}, translationPause*1000);
 		}, nowPlaying.english[1]*1000/playbackRate);
 	}
 
@@ -223,7 +242,9 @@ $(function() {
 	function itemDuration(item) {
 		let duration = 0;
 		duration += item.english[1]/playbackRate;
-		duration += item.esperanto[1]*translationSlownessFactor;
+		duration += item.esperanto[1]*translationSlownessFactor1;
+        duration += item.esperanto[1]*translationSlownessFactor2;
+        if (translationSlownessFactor1==0) duration += pauseBetweenWords;
 		duration += item.esperanto[1]/playbackRate;
 		duration += pauseBetweenWords;
 		return duration*1000;
@@ -239,7 +260,9 @@ $(function() {
 		// playlist.splice(3,99);
 		
 		playbackRate = parseFloat($('#playbackRate').val());
-		translationSlownessFactor = parseFloat($('#slownessFactor').val());
+		translationSlownessFactor1 = parseFloat($('#slownessFactor1').val());
+		translationSlownessFactor2 = parseFloat($('#slownessFactor2').val());
+        order = $('#order').val();
 		
 		// filter out phrases or vocab if neccessary
 		let vocabOrPhrases = $('input[name=vocabOrPhrases]:checked').val();
@@ -367,6 +390,7 @@ $(function() {
 });
 
 </script>
+<link rel="stylesheet" href="jquery.qtip.min.css" />
 <style>
 
     /* Special styles for narrow displays */
@@ -434,6 +458,7 @@ $(function() {
 		content : " ";
 		display : block;
 		height : 20px;
+        clear: both;
 	}
 	
 	.question {
@@ -510,7 +535,15 @@ $(function() {
     #duringPlayControls {
         text-align: center;
     }
-	
+
+    a.help {
+        border: 0px;
+        border-radius: 63px;
+        padding: 0px 4px;
+        font-weight: bold;
+        color: white;
+        background-color: #99F;	
+    } 
 </style>
 </head>
 <body>
@@ -532,7 +565,8 @@ $(function() {
 					Phrases: <input type="radio" name="vocabOrPhrases" value="phrases"> &nbsp; &nbsp; &nbsp;
 					Both: <input checked="yes" type="radio" name="vocabOrPhrases" value="both"> &nbsp; &nbsp; &nbsp;
 				<span class="question">Your translation speed:</span>
-					<select name="slownessFactor" id="slownessFactor">
+					<select name="slownessFactor1" id="slownessFactor1">
+						<option value="0.0">0 = do not leave gap</option>
 						<option value="0.5">&frac12;</option>
 						<option value="0.75">&frac34;</option>
 						<option value="1" selected="yes">normal</option>
@@ -540,8 +574,23 @@ $(function() {
 						<option value="1.5">1.5x</option>
 						<option value="1.75">1.75x</option>
 						<option value="2">2x</option>
-					</select><br />
-					<small>i.e. 2x = you require twice the time of the model answer</small>
+					</select>
+                    <a class="help" href="#" title="e.g. 2x = you require twice the time of the model answer">?</a>
+                    <br />
+				<span class="question">Second go speed:
+                    </span>
+					<select name="slownessFactor2" id="slownessFactor2">
+						<option value="0.0">0 = no second go</option>
+						<option value="0.5">&frac12;</option>
+						<option value="0.75">&frac34;</option>
+						<option value="1">normal</option>
+						<option value="1.25">1.25x</option>
+						<option value="1.5">1.5x</option>
+						<option value="1.75">1.75x</option>
+						<option value="2">2x</option>
+					</select>
+                    <a class="help" href="#" title="The &quot;second go&quot; gives you time to repeat the translation after you've heard the correct answer.">?</a>
+                    <br />
 				<span class="question">Audio playback speed:</span>
 					<select name="playbackRate" id="playbackRate">
 						<option value="0.5">&frac12;</option>
@@ -552,6 +601,11 @@ $(function() {
 						<option value="1.75">1.75x</option>
 						<option value="2">2x</option>
 					</select>
+				<span class="question">Order:</span>
+					<select name="order" id="order">
+						<option value="random">random</option>
+						<option value="sequential">sequential</option>
+					</select><br />
 				
 			</div>
 			<div id="progress" style="display:none">
