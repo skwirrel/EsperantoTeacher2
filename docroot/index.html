@@ -6,7 +6,7 @@
 <script src="js/mic.js"></script>
 <script src="js/jQuery.deserialize.js"></script>
 <script>
-var files=['lesson1','lesson2'];
+var files=['lesson1','lesson2','lesson3'];
 var labelData=[];
 
 var playlist;
@@ -75,7 +75,7 @@ $(function() {
 				});
 			}
 			
-			labelData.push(thisLabelData);
+			labelData[i] = thisLabelData;
 			
 			// See if we have finished loading in all the data about the audio files
 			if (--filesToProcess < 1) {
@@ -387,6 +387,14 @@ $(function() {
         #mainPage {
             width : 100%;
         }
+
+        .button {
+            font-size: 110%;
+        }
+
+        #about {
+            margin: 20px 0px;
+        }
     }
 
     /* Special styles for wide displays */
@@ -403,7 +411,14 @@ $(function() {
         #about {
             min-width: 20em;
             max-width: 80em;
+            margin: 20px;
         }
+
+        .button {
+            font-weight: bold;
+            font-size: 130%;
+        }
+
 
     }
 
@@ -414,6 +429,7 @@ $(function() {
     table {
         margin: 0;
     }
+
 	.question::before {
 		content : " ";
 		display : block;
@@ -490,6 +506,10 @@ $(function() {
 		color: red;
 		font-size: 120%;
 	}
+
+    #duringPlayControls {
+        text-align: center;
+    }
 	
 </style>
 </head>
@@ -498,7 +518,7 @@ $(function() {
 		<div id="mainPage">
 			<audio preload="auto" src=""></audio>
 			<audio id="microSound" preload="auto" src="audio/microSound.mp3"></audio>
-			<h1 style="max-width:90%; display: block;">The Esperanto Teacher 2.0</h1>
+			<h1 style="margin-top: 0px; max-width:90%; display: block;">The Esperanto Teacher 2.0</h1>
 			<div id="setupControls">
 				<div id="browserWarning">
 					This site is only designed to work with Google Chrome - some or all of the functionality may not work in your browser.
@@ -545,8 +565,8 @@ $(function() {
 				Loading audio files...
 			</div>
 			<div id="recordInfo" style="display:none">
-				<input type="button" id="record" value="RECORD" />
-				<input type="button" value="Cancel" onclick="$('#recordInfo').hide();$('#playControls').show();" />
+				<input class="button" type="button" id="record" value="RECORD" />
+				<input class="button" type="button" value="Cancel" onclick="$('#recordInfo').hide();$('#playControls').show();" />
 				<p>Click the "RECORD" button to start creating your .mp3 file.</p>
 				<p>A few notes about recording
 					<ul>
@@ -558,17 +578,17 @@ $(function() {
 			</div>
 			<div id="playControls">
 				<div id="beforePlayControls">
-					<input type="button" id="start" value="START" />
-					<input type="button" id="getMp3" value="GET .MP3" onclick="$('#recordInfo').show();$('#playControls').hide();" />
+					<input class="button" type="button" id="start" value="START" />
+					<input class="button" type="button" id="getMp3" value="GET .MP3" onclick="$('#recordInfo').show();$('#playControls').hide();" />
 					
 					<small class="footnote"><a href="#" onclick="$('#mainPage').hide();$('#about').show(); return false">Help | About | Thanks</a></small>
 
 				</div>
 				<div id="duringPlayControls" style="display:none">
-					<input type="button" id="stop" value="STOP" />&nbsp;
-					<input type="button" id="gotIt" value="Got it" />
-					<input type="button" id="repeatLater" value="Repeat Later" />
-					<input type="button" id="repeatNow" value="Repeat Now" />
+					<input class="button" type="button" id="stop" value="STOP" />&nbsp;&nbsp;
+					<input class="button" type="button" id="gotIt" value="Got it" />&nbsp;&nbsp;
+					<input class="button" type="button" id="repeatLater" value="Repeat Later" />&nbsp;&nbsp;
+					<input class="button" type="button" id="repeatNow" value="Repeat Now" />
 				</div>
 			</div>
 			<div id="audio">
@@ -581,7 +601,7 @@ $(function() {
 
 			<h2>About this site</h2>
 				<p>I built this site to help me learn Esperanto but thought others might find it useful.</p>
-				<p>I found the audio book version of the 1907 book <a target="_blank" href="https://librivox.org/the-esperanto-teacher-by-helen-fryer/">"The Esperanto Teacher: A Simple Course for Non-Grammarians"</a> to be very effective but I wanted to be able to practice just the phrases and vocabulary without having to listen to the entire lesson again. This site uses Javascript code running in your web browser to fast-forward/pause/rewind the audio automatically to represent these recordings as a series of English then Esperanto utterances with a pause in between to allow the listener to repeat the word/phrase.</p>
+				<p>I found the audio book version of the 1907 book <a target="_blank" href="https://librivox.org/the-esperanto-teacher-by-helen-fryer/">"The Esperanto Teacher: A Simple Course for Non-Grammarians"</a> to be very effective but I wanted to be able to practice just the phrases and vocabulary without having to listen to the entire lesson again. This site uses Javascript code running in your web browser to fast-forward/pause/rewind the audio automatically to replay these recordings as a series of English then Esperanto utterances with a pause in between to allow the listener to repeat the word/phrase.</p>
 				<p>It is designed to facilitate learning through repetition. It is also geared towards hands-free operation (especially when downloaded as an mp3) so that you can learn/practice whilst doing other things.</p>
 				<p>It is presented as-is with no warranty as to its fitness for any particular purpose.</p>
 			<small class="footnote"><a class="close button" href="#" onclick="$('#mainPage').show();$('#about').hide()">&lt;&lt; Back</a></small>
