@@ -51,12 +51,13 @@ $(function() {
 
 		let rawLabelData = {};
 
+		$('#includeFiles').append( '<div class="lesson" id="'+files[i]+'Checkbox"><input name="includeFiles" class="includeFiles" value="'+i+'" type="checkbox" checked="yes">'+files[i]+'</div>');
+        var audioObject = $('<audio controls="control" preload="none" src="audio/'+files[i]+'_exercise.mp3"></audio>');
+        $('#audio').append(files[i]+':').append( audioObject ).append('<br />');
+        var audioApi = audioObject.get(0);
+        audioObjects[i] = audioApi;
+
 		$.get(labelFile,function(data){
-			$('#includeFiles').append( '<div class="lesson" id="'+files[i]+'Checkbox"><input name="includeFiles" class="includeFiles" value="'+i+'" type="checkbox" checked="yes">'+files[i]+'</div>');
-			var audioObject = $('<audio controls="control" preload="none" src="audio/'+files[i]+'_exercise.mp3"></audio>');
-			$('#audio').append(files[i]+':').append( audioObject ).append('<br />');
-			var audioApi = audioObject.get(0);
-			audioObjects[i] = audioApi;
 			
 			let labels=data.split(/[\r\n]+/);
 			for (let j=0; j<labels.length; j++) {
