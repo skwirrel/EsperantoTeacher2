@@ -51,11 +51,11 @@ $(function() {
 
 		let rawLabelData = {};
 
-		$('#includeFiles').append( '<div class="lesson" id="'+files[i]+'Checkbox"><input name="includeFiles" class="includeFiles" value="'+i+'" type="checkbox" checked="yes">'+files[i]+'</div>');
+		$('#includeLessons').append( '<div class="lesson" id="'+files[i]+'"><input name="includeLessons" class="includeLessons" value="'+i+'" type="checkbox" checked="yes">'+files[i]+'<a class="playButton" href="">&#x25B6;</a></div>');
         var audioObject = $('<audio controls="control" preload="none" src="audio/'+files[i]+'_exercise.mp3"></audio>');
         $('#audio').append(files[i]+':').append( audioObject ).append('<br />');
         var audioApi = audioObject.get(0);
-        audioObjects[i] = audioApi;
+        audioObjects.push(audioApi);
 
 		$.get(labelFile,function(data){
 			
@@ -77,7 +77,7 @@ $(function() {
 				thisLabelData.push ({
 					file : files[i],
 					label : label,
-					object : audioApi,
+					index : i,
 					esperanto : rawLabelData[label],
 					english : rawLabelData['-'+label]
 				});
@@ -97,10 +97,39 @@ $(function() {
 		
 	}
 
-	$('#includeFiles').on('click','a.reset',function(){
+    var lessonPlayer = $('#lessonPlayer audio');
+    var closeLessonPlayer=false;
+
+    lessonPlayer.on('play',function(){
+        if (closeLessonPlayer) window.clearInterval(closeLessonPlayer);
+        closeLessonPlayer=false;
+    });
+
+    lessonPlayer.on('pause',function(){
+        if (closeLessonPlayer) window.clearInterval(closeLessonPlayer);
+        closeLessonPlayer = window.setInterval(function(){
+            console.log('closing');
+            if (closeLessonPlayer) {
+                lessonPlayer.parent().slideUp('slow');
+            }
+        },5000);
+    });
+
+	$('#includeLessons').on('click','a.playButton',function(){
+        let player = lessonPlayer.get(0);
+        let lessonId = $(this).parent().prop('id');
+        let src = 'audio/'+lessonId+'.mp3';
+        if (player.src.slice(src.length*-1) != src) player.src = 'audio/'+lessonId+'.mp3';
+        player.play();
+        lessonPlayer.parent().slideDown('fast');
+
+        return false;
+    });
+
+	$('#includeLessons').on('click','a.reset',function(){
 		let self = $(this);
 		
-		let file = self.parent().prop('id').slice(0,-8);
+		let file = self.parent().prop('id');
 		console.log('Resetting exclusions for '+file);
 
 		for( let i=0; i<exclude.length; i++ ) {
@@ -121,7 +150,7 @@ $(function() {
 			let file = exclude[i][0];
 			if (done[file]) continue;
 			done[file] = true;
-			$('#'+file+'Checkbox').append('<a class="reset" data_filename="'+files[i]+'" href="#">Reset</a>');
+			$('#'+file).append('<a class="reset" data_filename="'+files[i]+'" href="#">Reset</a>');
 		}
 	}
 	
@@ -147,7 +176,7 @@ $(function() {
             }
 		}
 
-		mainAudio.src = nowPlaying.object.src;
+		mainAudio.src = audioObjects[nowPlaying.index].src;
 		mainAudio.load();
 		mainAudio.playbackRate = playbackRate;
 		
@@ -267,7 +296,6 @@ $(function() {
 		
 		// filter out phrases or vocab if neccessary
 		let vocabOrPhrases = $('input[name=vocabOrPhrases]:checked').val();
-		console.log(vocabOrPhrases);
 		if ( vocabOrPhrases == 'vocab' || vocabOrPhrases == 'phrases' ) {
 			// >2.5s = phrase, <2.5s = vocab
 			let cutOff = 2.5;
@@ -322,6 +350,9 @@ $(function() {
 		playlist = [];
 		
 		localStorage.setItem('setupControlsForm',$('#setupControlsForm').serialize());
+
+        // Stop the lesson player if it is playing
+        lessonPlayer.get(0).pause();
 	
         $('#recordInfo').hide();
         $('#playControls').show();	
@@ -330,7 +361,7 @@ $(function() {
 		$('#loading').show();
 
 		var filesToLoad = [];
-		$('.includeFiles:checked').each(function(){
+		$('.includeLessons:checked').each(function(){
 			let val = $(this).val();
 			playlist = playlist.concat(labelData[val]);
 			filesToLoad.push(audioObjects[val]);
@@ -338,17 +369,17 @@ $(function() {
 
 		var numFilesToLoad = filesToLoad.length;
 		for (i=0; i<filesToLoad.length; i++) {
-			audioObjects[i].play();
+			filesToLoad[i].play();
 		}
 
 		var paused = [];
 		var interval = window.setInterval( function(){
 			var loaded = 0;
 			for (i=0; i<filesToLoad.length; i++) {
-				if (audioObjects[i].readyState == 4) {
+				if (filesToLoad[i].readyState == 4) {
 					loaded++;
 					if (!paused[i]) {
-						audioObjects[i].pause();
+						filesToLoad[i].pause();
 						paused[i] = true;
 					}
 				}
@@ -420,6 +451,7 @@ $(function() {
         #about {
             margin: 20px 0px;
         }
+
     }
 
     /* Special styles for wide displays */
@@ -467,12 +499,29 @@ $(function() {
 		font-size: 1.5em;
 		margin-bottom: 10px;
 	}
-	
+
+    input[type=checkbox] {
+        font-size: 200%;
+        transform: scale(1.7);
+        margin-right: 10px;
+    }
+
 	select {
 		vertical-align:text-bottom;
 		height: 1.5em;
 	}
 	
+    a.playButton {
+        color: white;
+        background: #66f;
+        display: inline-block;
+        font-size: 70%;
+        padding: 1px 4px 3px 5px;
+        margin: 0px 5px;
+        border-radius: 4px;
+        vertical-align: bottom;
+    }
+
 	#audio { display: none; }
 
 	#nowPlaying {
@@ -518,7 +567,7 @@ $(function() {
 		width: 9em;
 	}
 	
-	#includeFiles {
+	#includeLessons {
 		padding: 10px 0 20px 0;
 	}
 	
@@ -544,7 +593,17 @@ $(function() {
         font-weight: bold;
         color: white;
         background-color: #99F;	
-    } 
+    }
+
+    #lessonPlayer {
+        padding-top: 10px;
+        text-align: center;
+    }
+
+    #lessonPlayer audio {
+        width: 100%;
+    }
+
 </style>
 </head>
 <body>
@@ -558,9 +617,14 @@ $(function() {
 					This site is only designed to work with Google Chrome - some or all of the functionality may not work in your browser.
 				</div>
 				<form id="setupControlsForm" name="setupControls" action="#">
-				<div id="includeFiles">
-					<span class="question">Include these files:</span><br />
+				<div id="lessons">
+					<span class="question">Include exercise from these lessons:</span><br />
+				    <div id="includeLessons">
+                    </div>
 				</div>
+                <div id="lessonPlayer" style="display:none">
+                    <audio controls="yes" preload="auto" src=""></audio>
+                </div>
 				<span class="question">What to practice:</span><br />
 					Vocab: <input type="radio" name="vocabOrPhrases" value="vocab"> &nbsp; &nbsp; &nbsp;
 					Phrases: <input type="radio" name="vocabOrPhrases" value="phrases"> &nbsp; &nbsp; &nbsp;
